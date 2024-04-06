@@ -1,5 +1,5 @@
 
-
+#define HA_ESP_SENSOR_ENDPOINT 1
 #define DEBUG 1
 
 #if DEBUG == 1
