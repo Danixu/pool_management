@@ -239,17 +239,16 @@ esp_err_t zb_update_chlorine(int32_t chlorine) {
 
 /********************* Arduino functions **************************/
 void setup() {
+#if DEBUG == 1
   Serial.begin(115200);
+#endif
+
   // Init Zigbee
   esp_zb_platform_config_t config = {
     .radio_config = ESP_ZB_DEFAULT_RADIO_CONFIG(),
     .host_config = ESP_ZB_DEFAULT_HOST_CONFIG(),
   };
   ESP_ERROR_CHECK(esp_zb_platform_config(&config));
-
-  // Init RMT and leave light OFF
-  neopixelWrite(LED_PIN, 255, 0, 0);
-
   // Start Zigbee task
   xTaskCreate(esp_zb_task, "Zigbee_main", 4096, NULL, 5, NULL);
 }
@@ -283,10 +282,6 @@ persistent_settings persistentSettings = {};
 runtime_settings runtimeSettings = {};
 
 void setup() {
-#if DEBUG == 1
-  Serial.begin(115200);
-#endif
-
   // Initialize the EEPROM
   // Header size + ((Persistent Settings size + 1 crc bit) * 2 copies of the settings data for backup)
   uint8_t settingsSize = 2 + ((sizeof(persistentSettings) + 1) * 2);
@@ -394,27 +389,6 @@ void setup() {
     logger_line("The calibrations settings are: Low = %d, High = %d. (must be similar)", runtimeSettings.phCalibrationLow, runtimeSettings.phCalibrationHigh);
 
     // ToDo: Check if both are consistentm by comparing them (I have to do some tests first).
-  }
-
-  // Init Zigbee
-  esp_zb_platform_config_t config = {
-    .radio_config = ESP_ZB_DEFAULT_RADIO_CONFIG(),
-    .host_config = ESP_ZB_DEFAULT_HOST_CONFIG(),
-  };
-  ESP_ERROR_CHECK(esp_zb_platform_config(&config));
-  // Start Zigbee task
-  xTaskCreate(esp_zb_task, "Zigbee_main", 4096, NULL, 5, NULL);
-}
-
-uint64_t last_run = 0;
-
-void loop() {
-  uint64_t new_run = millis() / 5000;
-  //empty, zigbee running in task
-  if (new_run != last_run) {
-    logger_line("Updating tempearure.");
-    last_run = new_run;
-    zb_update_temperature(random(1000, 4000));
   }
 }
 */

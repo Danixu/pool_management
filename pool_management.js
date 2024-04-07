@@ -19,7 +19,7 @@ function ph() {
     return numeric({
         name: 'PH',
         cluster: 64777,
-        attribute: {ID: 0},
+        attribute: {ID: 0, type: 0x21},
         reporting: {min: '10_SECONDS', max: '1_HOUR', change: 1},
         description: 'PH of the swiming pool',
         //unit: 'ph',
@@ -34,7 +34,7 @@ function chlorine() {
     return numeric({
         name: 'Chlorine',
         cluster: 64794,
-        attribute: {ID: 0},
+        attribute: {ID: 0, type: 0x21},
         reporting: {min: '10_SECONDS', max: '1_HOUR', change: 1},
         description: 'Chlorine in the swiming pool',
         scale: 100,
