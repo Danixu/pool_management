@@ -45,84 +45,186 @@
 
 #define ESP_ZB_DEFAULT_RADIO_CONFIG() \
   { \
-    .radio_mode = RADIO_MODE_NATIVE, \
+    .radio_mode = ZB_RADIO_MODE_NATIVE, \
   }
 
 #define ESP_ZB_DEFAULT_HOST_CONFIG() \
   { \
-    .host_connection_mode = HOST_CONNECTION_MODE_NONE, \
+    .host_connection_mode = ZB_HOST_CONNECTION_MODE_NONE, \
   }
-
-#define HA_ESP_SENSOR_ENDPOINT 1
 
 
 /********************* Zigbee functions **************************/
 static void esp_zb_task(void *pvParameters) {
-  // Define cluster attributes
-  char manufname[] = { 6, 'D', 'a', 'n', 'i', 'x', 'u' };
-  char modelid[] = { 15, 'P', 'o', 'o', 'l', '.', 'M', 'a', 'n', 'a', 'g', 'e', 'm', 'e', 'n', 't' };
+  esp_zb_cluster_list_t *esp_zb_algaecide_cluster_list = esp_zb_zcl_cluster_list_create();
 
+  // Create the endpoints list
+  esp_zb_ep_list_t *esp_zb_ep_list = esp_zb_ep_list_create();
+
+  // Main Switch
+  bool mainSwitch = false;
+  // Temperature Values
   int tempValue = 2300;
-  int tempMin = 0;
+  int tempMin = -32000;
   int tempMax = 32000;
 
+  // Pump Switch
+  bool pumpSwitch = false;
+
+  // PH Switch
+  bool phSwitch = false;
+  // PH Values
   uint16_t phValue = 700;
   uint16_t phMin = 0;
   uint16_t phMax = 1400;
 
+  // Chlorine Switch
+  bool chlorineSwitch = false;
+  // Chlorine Values
   uint16_t chlorineValue = 700;
   uint16_t chlorineMin = 0;
   uint16_t chlorineMax = 1400;
 
+  // Algaecide Switch
+  bool algaecideSwitch = false;
 
   // Initialize Zigbee stack
   esp_zb_cfg_t zb_nwk_cfg = ESP_ZB_ZED_CONFIG();
   esp_zb_init(&zb_nwk_cfg);
 
+  //
+  // ------------------------------ Cluster BASIC ------------------------------
+  //
 
-  // Create genBasic cluster/attribute list
-  esp_zb_attribute_list_t *esp_zb_basic_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_BASIC);
-  esp_zb_basic_cluster_add_attr(esp_zb_basic_cluster, ESP_ZB_ZCL_ATTR_BASIC_MANUFACTURER_NAME_ID, &manufname[0]);
-  esp_zb_basic_cluster_add_attr(esp_zb_basic_cluster, ESP_ZB_ZCL_ATTR_BASIC_MODEL_IDENTIFIER_ID, &modelid[0]);
+  // Basic cluster configuration
+  esp_zb_basic_cluster_cfg_t basic_cluster_cfg = {
+      .zcl_version = ESP_ZB_ZCL_BASIC_ZCL_VERSION_DEFAULT_VALUE,
+      .power_source = 0x01,
+  };
+  uint32_t ApplicationVersion = 0x0001;
+  uint32_t StackVersion = 0x0002;
+  uint32_t HWVersion = 0x0001;
+  DEFINE_PSTRING(ManufacturerName, "Danixu");
+  DEFINE_PSTRING(ModelIdentifier, "Pool Management");
+  DEFINE_PSTRING(DateCode, "20240805");
 
+  // Create the basic clusters list
+  esp_zb_cluster_list_t *esp_zb_basic_cluster_list = esp_zb_zcl_cluster_list_create();
+  // Create genBasic cluster/attributes
+  esp_zb_attribute_list_t *esp_zb_basic_cluster = esp_zb_basic_cluster_create(&basic_cluster_cfg);
+  esp_zb_basic_cluster_add_attr(esp_zb_basic_cluster, ESP_ZB_ZCL_ATTR_BASIC_APPLICATION_VERSION_ID, &ApplicationVersion);
+  esp_zb_basic_cluster_add_attr(esp_zb_basic_cluster, ESP_ZB_ZCL_ATTR_BASIC_STACK_VERSION_ID, &StackVersion);
+  esp_zb_basic_cluster_add_attr(esp_zb_basic_cluster, ESP_ZB_ZCL_ATTR_BASIC_HW_VERSION_ID, &HWVersion);
+  esp_zb_basic_cluster_add_attr(esp_zb_basic_cluster, ESP_ZB_ZCL_ATTR_BASIC_MANUFACTURER_NAME_ID, (void *)&ManufacturerName);
+  esp_zb_basic_cluster_add_attr(esp_zb_basic_cluster, ESP_ZB_ZCL_ATTR_BASIC_MODEL_IDENTIFIER_ID, (void *)&ModelIdentifier);
+  esp_zb_basic_cluster_add_attr(esp_zb_basic_cluster, ESP_ZB_ZCL_ATTR_BASIC_DATE_CODE_ID, (void *)&DateCode);
+  // Add the cluster to the basic clusters list
+  esp_zb_cluster_list_add_basic_cluster(esp_zb_basic_cluster_list, esp_zb_basic_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
 
-  // Create temperature cluster/attribute list
+  // Create temperature cluster/attributes
   esp_zb_attribute_list_t *esp_zb_temperature_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_TEMP_MEASUREMENT);
   esp_zb_temperature_meas_cluster_add_attr(esp_zb_temperature_cluster, ESP_ZB_ZCL_ATTR_TEMP_MEASUREMENT_VALUE_ID, &tempValue);
   esp_zb_temperature_meas_cluster_add_attr(esp_zb_temperature_cluster, ESP_ZB_ZCL_ATTR_TEMP_MEASUREMENT_MIN_VALUE_ID, &tempMin);
   esp_zb_temperature_meas_cluster_add_attr(esp_zb_temperature_cluster, ESP_ZB_ZCL_ATTR_TEMP_MEASUREMENT_MAX_VALUE_ID, &tempMax);
+  // Add the cluster to the basic list
+  esp_zb_cluster_list_add_temperature_meas_cluster(esp_zb_basic_cluster_list, esp_zb_temperature_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
+
+  // Create the main switch cluster/attributges
+  esp_zb_attribute_list_t *esp_zb_main_switch_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_ON_OFF);
+  esp_zb_on_off_cluster_add_attr(esp_zb_main_switch_cluster, ESP_ZB_ZCL_ATTR_ON_OFF_ON_OFF_ID, &mainSwitch);
+  // Add the cluster to the basic list
+  esp_zb_cluster_list_add_on_off_cluster(esp_zb_basic_cluster_list, esp_zb_main_switch_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
+
+  // Create the endpoint configuration, and add it to the endpoint lists attaching the clusters list.
+  esp_zb_endpoint_config_t esp_zb_basic_endpoint_config = {\
+    .endpoint = ESPZB_EP_BASIC, \
+    .app_profile_id = ESP_ZB_AF_HA_PROFILE_ID, \
+    .app_device_id = ESP_ZB_HA_CUSTOM_ATTR_DEVICE_ID, \
+    .app_device_version = 0
+  };
+  esp_zb_ep_list_add_ep(esp_zb_ep_list, esp_zb_basic_cluster_list, esp_zb_basic_endpoint_config);
 
 
+  //
+  // ------------------------------ Cluster Pump Switch ------------------------------
+  //
+
+  // Create the clusters list
+  esp_zb_cluster_list_t* esp_zb_pump_switch_cluster_list = esp_zb_zcl_cluster_list_create();
+  // Create the switch cluster/attributges
+  esp_zb_attribute_list_t *esp_zb_pump_switch_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_ON_OFF);
+  esp_zb_on_off_cluster_add_attr(esp_zb_pump_switch_cluster, ESP_ZB_ZCL_ATTR_ON_OFF_ON_OFF_ID, &pumpSwitch);
+  // Add the cluster to the list
+  esp_zb_cluster_list_add_on_off_cluster(esp_zb_pump_switch_cluster_list, esp_zb_pump_switch_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
+
+  // Create the endpoint configuration, and add it to the endpoint lists attaching the clusters list.
+  esp_zb_endpoint_config_t esp_zb_pump_switch_endpoint_config = {\
+    .endpoint = ESPZB_PUMP_SWITCH, \
+    .app_profile_id = ESP_ZB_AF_HA_PROFILE_ID, \
+    .app_device_id = ESP_ZB_HA_CUSTOM_ATTR_DEVICE_ID, \
+    .app_device_version = 0
+  };
+  esp_zb_ep_list_add_ep(esp_zb_ep_list, esp_zb_pump_switch_cluster_list, esp_zb_pump_switch_endpoint_config);
+
+  //
+  // ------------------------------ Cluster PH ------------------------------
+  //
+
+  // Create the PH Cluster List
+  esp_zb_cluster_list_t *esp_zb_ph_cluster_list = esp_zb_zcl_cluster_list_create();
+  // Create the switch cluster/attributges
+  esp_zb_attribute_list_t *esp_zb_ph_switch_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_ON_OFF);
+  esp_zb_on_off_cluster_add_attr(esp_zb_ph_switch_cluster, ESP_ZB_ZCL_ATTR_ON_OFF_ON_OFF_ID, &phSwitch);
+  // Add the cluster to the list
+  esp_zb_cluster_list_add_on_off_cluster(esp_zb_ph_cluster_list, esp_zb_ph_switch_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
   // Create custom cluster for PH
   esp_zb_attribute_list_t *esp_zb_ph_cluster = esp_zb_zcl_attr_list_create(0xfd09U);
   esp_zb_cluster_add_attr(esp_zb_ph_cluster, 0xfd09U, 0x0000, ESP_ZB_ZCL_ATTR_TYPE_U16, ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY | ESP_ZB_ZCL_ATTR_ACCESS_REPORTING, &phValue);
   esp_zb_cluster_add_attr(esp_zb_ph_cluster, 0xfd09U, 0x0001, ESP_ZB_ZCL_ATTR_TYPE_U16, ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY | ESP_ZB_ZCL_ATTR_ACCESS_REPORTING, &phMax);
   esp_zb_cluster_add_attr(esp_zb_ph_cluster, 0xfd09U, 0x0002, ESP_ZB_ZCL_ATTR_TYPE_U16, ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY | ESP_ZB_ZCL_ATTR_ACCESS_REPORTING, &phMin);
+  // Create PH cluster list.
+  esp_zb_cluster_list_add_custom_cluster(esp_zb_ph_cluster_list, esp_zb_ph_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
+  // Add the endpoint to the list
+  esp_zb_endpoint_config_t esp_zb_ph_endpoint_config = {\
+    .endpoint = ESPZB_PH_SENSOR, \
+    .app_profile_id = ESP_ZB_AF_HA_PROFILE_ID, \
+    .app_device_id = ESP_ZB_HA_CUSTOM_ATTR_DEVICE_ID, \
+    .app_device_version = 0
+  };
+  esp_zb_ep_list_add_ep(esp_zb_ep_list, esp_zb_ph_cluster_list, esp_zb_ph_endpoint_config);
 
 
+  // Create the Chlorine Cluster List
+  esp_zb_cluster_list_t *esp_zb_chlorine_cluster_list = esp_zb_zcl_cluster_list_create();
+  // Create the switch cluster/attributges
+  esp_zb_attribute_list_t *esp_zb_chlorine_switch_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_ON_OFF);
+  esp_zb_on_off_cluster_add_attr(esp_zb_chlorine_switch_cluster, ESP_ZB_ZCL_ATTR_ON_OFF_ON_OFF_ID, &chlorineSwitch);
+  // Add the cluster to the list
+  esp_zb_cluster_list_add_on_off_cluster(esp_zb_chlorine_cluster_list, esp_zb_chlorine_switch_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
   // Create custom cluster for Chlorine
-  esp_zb_attribute_list_t *esp_zb_chlorine_cluster = esp_zb_zcl_attr_list_create(0xfd1aU);
-  esp_zb_cluster_add_attr(esp_zb_chlorine_cluster, 0xfd1aU, 0x0000, ESP_ZB_ZCL_ATTR_TYPE_U16, ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY | ESP_ZB_ZCL_ATTR_ACCESS_REPORTING, &chlorineValue);
-  esp_zb_cluster_add_attr(esp_zb_chlorine_cluster, 0xfd1aU, 0x0001, ESP_ZB_ZCL_ATTR_TYPE_U16, ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY | ESP_ZB_ZCL_ATTR_ACCESS_REPORTING, &chlorineMax);
-  esp_zb_cluster_add_attr(esp_zb_chlorine_cluster, 0xfd1aU, 0x0002, ESP_ZB_ZCL_ATTR_TYPE_U16, ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY | ESP_ZB_ZCL_ATTR_ACCESS_REPORTING, &chlorineMin);
-
-
-  // Create cluster list
-  esp_zb_cluster_list_t *esp_zb_cluster_list = esp_zb_zcl_cluster_list_create();
-  esp_zb_cluster_list_add_basic_cluster(esp_zb_cluster_list, esp_zb_basic_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
-  esp_zb_cluster_list_add_temperature_meas_cluster(esp_zb_cluster_list, esp_zb_temperature_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
-  esp_zb_cluster_list_add_custom_cluster(esp_zb_cluster_list, esp_zb_ph_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
-  esp_zb_cluster_list_add_custom_cluster(esp_zb_cluster_list, esp_zb_chlorine_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
+  esp_zb_attribute_list_t *esp_zb_chlorine_cluster = esp_zb_zcl_attr_list_create(0xfd10U);
+  esp_zb_cluster_add_attr(esp_zb_chlorine_cluster, 0xfd10U, 0x0000, ESP_ZB_ZCL_ATTR_TYPE_U16, ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY | ESP_ZB_ZCL_ATTR_ACCESS_REPORTING, &chlorineValue);
+  esp_zb_cluster_add_attr(esp_zb_chlorine_cluster, 0xfd10U, 0x0001, ESP_ZB_ZCL_ATTR_TYPE_U16, ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY | ESP_ZB_ZCL_ATTR_ACCESS_REPORTING, &chlorineMax);
+  esp_zb_cluster_add_attr(esp_zb_chlorine_cluster, 0xfd10U, 0x0002, ESP_ZB_ZCL_ATTR_TYPE_U16, ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY | ESP_ZB_ZCL_ATTR_ACCESS_REPORTING, &chlorineMin);
+  // Create Chlorine cluster
+  esp_zb_cluster_list_add_custom_cluster(esp_zb_chlorine_cluster_list, esp_zb_chlorine_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
+  // Add the endpoint to the list
+  esp_zb_endpoint_config_t esp_zb_chlorine_endpoint_config = {\
+    .endpoint = ESPZB_CHLORINE_SENSOR, \
+    .app_profile_id = ESP_ZB_AF_HA_PROFILE_ID, \
+    .app_device_id = ESP_ZB_HA_CUSTOM_ATTR_DEVICE_ID, \
+    .app_device_version = 0
+  };
+  esp_zb_ep_list_add_ep(esp_zb_ep_list, esp_zb_chlorine_cluster_list, esp_zb_chlorine_endpoint_config);
 
 
   // Create endpoint list
-  esp_zb_ep_list_t *esp_zb_ep_list = esp_zb_ep_list_create();
-  // esp_zb_ep_list_add_ep(esp_zb_ep_list, esp_zb_cluster_list, HA_ESP_SENSOR_ENDPOINT, ESP_ZB_AF_HA_PROFILE_ID, ESP_ZB_HA_TEMPERATURE_SENSOR_DEVICE_ID);
-  esp_zb_ep_list_add_ep(esp_zb_ep_list, esp_zb_cluster_list, HA_ESP_SENSOR_ENDPOINT, ESP_ZB_AF_HA_PROFILE_ID, ESP_ZB_HA_CUSTOM_ATTR_DEVICE_ID);
-
+  //esp_zb_ep_list_add_ep(esp_zb_ep_list, esp_zb_algaecide_cluster_list, ESPZB_ALGAECIDE_SENSOR, ESP_ZB_AF_HA_PROFILE_ID, ESP_ZB_HA_CUSTOM_ATTR_DEVICE_ID);
 
   // Register endpoint list
   esp_zb_device_register(esp_zb_ep_list);
+
+  esp_zb_set_primary_network_channel_set(ESP_ZB_PRIMARY_CHANNEL_MASK);
 
   //esp_zb_factory_reset();
 
@@ -134,7 +236,7 @@ static void esp_zb_task(void *pvParameters) {
 esp_err_t zb_update_temperature(int32_t temperature) {
   /* Update temperature attribute */
   esp_err_t state = esp_zb_zcl_set_attribute_val(
-    HA_ESP_SENSOR_ENDPOINT,
+    ESPZB_EP_BASIC,
     ESP_ZB_ZCL_CLUSTER_ID_TEMP_MEASUREMENT,
     ESP_ZB_ZCL_CLUSTER_SERVER_ROLE,
     ESP_ZB_ZCL_ATTR_TEMP_MEASUREMENT_VALUE_ID,
@@ -149,7 +251,7 @@ esp_err_t zb_update_temperature(int32_t temperature) {
 
   /* Report temperature attribute */
   static esp_zb_zcl_report_attr_cmd_t temperature_cmd_req = {
-    { NULL, NULL, 1 },
+    { NULL, NULL, ESPZB_EP_BASIC },
     ESP_ZB_APS_ADDR_MODE_DST_ADDR_ENDP_NOT_PRESENT,
     ESP_ZB_ZCL_CLUSTER_ID_TEMP_MEASUREMENT,
     ESP_ZB_ZCL_CLUSTER_SERVER_ROLE,
@@ -168,24 +270,24 @@ esp_err_t zb_update_temperature(int32_t temperature) {
 
 
 esp_err_t zb_update_ph(int32_t ph) {
-  /* Update ph attribute */
+  // Update ph attribute
   esp_err_t state = esp_zb_zcl_set_attribute_val(
-    HA_ESP_SENSOR_ENDPOINT,
+    ESPZB_PH_SENSOR,
     0xfd09U,
     ESP_ZB_ZCL_CLUSTER_SERVER_ROLE,
     0x0000,
     &ph,
     false);
 
-  /* Error check */
+  // Error check
   if (state != ESP_ZB_ZCL_STATUS_SUCCESS) {
     logger_line("Updating ph attribute failed!");
     return ESP_FAIL;
   }
 
-  /* Report ph attribute */
+  // Report ph attribute
   static esp_zb_zcl_report_attr_cmd_t ph_cmd_req = {
-    { NULL, NULL, 1 },
+    { NULL, NULL, ESPZB_PH_SENSOR },
     ESP_ZB_APS_ADDR_MODE_DST_ADDR_ENDP_NOT_PRESENT,
     0xfd09U,
     ESP_ZB_ZCL_CLUSTER_SERVER_ROLE,
@@ -193,7 +295,7 @@ esp_err_t zb_update_ph(int32_t ph) {
   };
   state = esp_zb_zcl_report_attr_cmd_req(&ph_cmd_req);
 
-  /* Error check */
+  // Error check
   if (state != ESP_ZB_ZCL_STATUS_SUCCESS) {
     logger_line("Reporting ph attribute failed!");
     return ESP_FAIL;
@@ -205,7 +307,7 @@ esp_err_t zb_update_ph(int32_t ph) {
 esp_err_t zb_update_chlorine(int32_t chlorine) {
   /* Update chlorine attribute */
   esp_err_t state = esp_zb_zcl_set_attribute_val(
-    HA_ESP_SENSOR_ENDPOINT,
+    ESPZB_CHLORINE_SENSOR,
     0xfd1aU,
     ESP_ZB_ZCL_CLUSTER_SERVER_ROLE,
     0x0000,
@@ -220,7 +322,7 @@ esp_err_t zb_update_chlorine(int32_t chlorine) {
 
   /* Report chlorine attribute */
   static esp_zb_zcl_report_attr_cmd_t chlorine_cmd_req = {
-    { NULL, NULL, 1 },
+    { NULL, NULL, ESPZB_CHLORINE_SENSOR },
     ESP_ZB_APS_ADDR_MODE_DST_ADDR_ENDP_NOT_PRESENT,
     0xfd1aU,
     ESP_ZB_ZCL_CLUSTER_SERVER_ROLE,
@@ -262,8 +364,8 @@ void loop() {
     Serial.println("Updating tempearure.");
     last_run = new_run;
     zb_update_temperature(random(1000, 4000));
-    zb_update_ph(random(1000, 4000));
-    zb_update_chlorine(random(1000, 4000));
+    zb_update_ph(random(1000, 1400));
+    zb_update_chlorine(random(1000, 1400));
   }
 }
 

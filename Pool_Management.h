@@ -1,5 +1,4 @@
 
-#define HA_ESP_SENSOR_ENDPOINT 1
 #define DEBUG 1
 
 #if DEBUG == 1
@@ -53,3 +52,10 @@ struct runtime_settings {
 
 // EEPROM header used to determine if data was written
 char header[2] = { 'P', 'M' };
+
+// Endpoints
+#define ESPZB_EP_BASIC 1
+#define ESPZB_PUMP_SWITCH 2
+#define ESPZB_PH_SENSOR 3
+#define ESPZB_CHLORINE_SENSOR 4
+#define ESPZB_ALGAECIDE_SENSOR 5

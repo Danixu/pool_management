@@ -1,4 +1,5 @@
 #include "esp_zigbee_core.h"
+#include "ha/esp_zigbee_ha_standard.h"
 #include "esp_check.h"
 #include "esp_err.h"
 
@@ -6,11 +7,18 @@
 #error "Zigbee end device mode is not selected in Tools->Zigbee mode"
 #endif
 
+#define DEFINE_PSTRING(var, str)   \
+    const struct                   \
+    {                              \
+        unsigned char len;         \
+        char content[sizeof(str)]; \
+    }(var) = {sizeof(str) - 1, (str)}
+
 /* Default End Device config */
 #define ESP_ZB_ZED_CONFIG() \
   { \
     .esp_zb_role = ESP_ZB_DEVICE_TYPE_ED, \
-    .install_code_policy = false, \
+    .install_code_policy = INSTALLCODE_POLICY_ENABLE, \
     .nwk_cfg = { \
       .zed_cfg = { \
         .ed_timeout = ESP_ZB_ED_AGING_TIMEOUT_64MIN, \
@@ -21,20 +29,18 @@
 
 #define ESP_ZB_DEFAULT_RADIO_CONFIG() \
   { \
-    .radio_mode = RADIO_MODE_NATIVE, \
+    .radio_mode = ZB_RADIO_MODE_NATIVE, \
   }
 
 #define ESP_ZB_DEFAULT_HOST_CONFIG() \
   { \
-    .host_connection_mode = HOST_CONNECTION_MODE_NONE, \
+    .host_connection_mode = ZB_HOST_CONNECTION_MODE_NONE, \
   }
 
 
 /********************* Zigbee functions **************************/
 static void bdb_start_top_level_commissioning_cb(uint8_t mode_mask) {
-  if (esp_zb_bdb_start_top_level_commissioning(mode_mask) != ESP_OK) {
-    logger_line("Failed to start Zigbee bdb commissioning");
-  }
+  ESP_ERROR_CHECK(esp_zb_bdb_start_top_level_commissioning(mode_mask));
 }
 
 void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct) {
@@ -76,6 +82,53 @@ void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct) {
       break;
   }
 }
+
+/*
+void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct) {
+  uint32_t *p_sg_p = signal_struct->p_app_signal;
+  esp_err_t err_status = signal_struct->esp_err_status;
+  esp_zb_app_signal_type_t sig_type = (esp_zb_app_signal_type_t)*p_sg_p;
+  switch (sig_type) {
+    case ESP_ZB_ZDO_SIGNAL_SKIP_STARTUP:
+      log_i("Zigbee stack initialized");
+      esp_zb_bdb_start_top_level_commissioning(ESP_ZB_BDB_MODE_INITIALIZATION);
+      break;
+    case ESP_ZB_BDB_SIGNAL_DEVICE_FIRST_START:
+    case ESP_ZB_BDB_SIGNAL_DEVICE_REBOOT:
+      if (err_status == ESP_OK) {
+        log_i("Start network steering");
+        log_i("Device started up in %s factory-reset mode", esp_zb_bdb_is_factory_new() ? "" : "non");
+        // Start Temperature sensor reading task
+        //xTaskCreate(temp_sensor_value_update, "temp_sensor_update", 2048, NULL, 10, NULL);
+        if (esp_zb_bdb_is_factory_new()) {
+          log_i("Start network steering");
+          esp_zb_bdb_start_top_level_commissioning(ESP_ZB_BDB_MODE_NETWORK_STEERING);
+        } else {
+          log_i("Device rebooted");
+        }
+      } else {
+        // commissioning failed 
+        log_w("Failed to initialize Zigbee stack (status: %s)", esp_err_to_name(err_status));
+      }
+      break;
+    case ESP_ZB_BDB_SIGNAL_STEERING:
+      if (err_status == ESP_OK) {
+        esp_zb_ieee_addr_t extended_pan_id;
+        esp_zb_get_extended_pan_id(extended_pan_id);
+        log_i(
+          "Joined network successfully (Extended PAN ID: %02x:%02x:%02x:%02x:%02x:%02x:%02x:%02x, PAN ID: 0x%04hx, Channel:%d, Short Address: 0x%04hx)",
+          extended_pan_id[7], extended_pan_id[6], extended_pan_id[5], extended_pan_id[4], extended_pan_id[3], extended_pan_id[2], extended_pan_id[1],
+          extended_pan_id[0], esp_zb_get_pan_id(), esp_zb_get_current_channel(), esp_zb_get_short_address()
+        );
+      } else {
+        log_i("Network steering was not successful (status: %s)", esp_err_to_name(err_status));
+        esp_zb_scheduler_alarm((esp_zb_callback_t)bdb_start_top_level_commissioning_cb, ESP_ZB_BDB_MODE_NETWORK_STEERING, 1000);
+      }
+      break;
+    default: log_i("ZDO signal: %s (0x%x), status: %s", esp_zb_zdo_signal_to_string(sig_type), sig_type, esp_err_to_name(err_status)); break;
+  }
+}
+*/
 
 static esp_err_t zb_attribute_reporting_handler(const esp_zb_zcl_report_attr_message_t *message)
 {
