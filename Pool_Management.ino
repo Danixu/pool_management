@@ -56,8 +56,6 @@
 
 /********************* Zigbee functions **************************/
 static void esp_zb_task(void *pvParameters) {
-  esp_zb_cluster_list_t *esp_zb_algaecide_cluster_list = esp_zb_zcl_cluster_list_create();
-
   // Create the endpoints list
   esp_zb_ep_list_t *esp_zb_ep_list = esp_zb_ep_list_create();
 
@@ -190,8 +188,16 @@ static void esp_zb_task(void *pvParameters) {
   esp_zb_cluster_add_attr(esp_zb_ph_cluster, ESPZB_CID_PH, 0x0000, ESP_ZB_ZCL_ATTR_TYPE_U16, ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY | ESP_ZB_ZCL_ATTR_ACCESS_REPORTING, &globalData.ph.value);
   esp_zb_cluster_add_attr(esp_zb_ph_cluster, ESPZB_CID_PH, 0x0001, ESP_ZB_ZCL_ATTR_TYPE_U16, ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY | ESP_ZB_ZCL_ATTR_ACCESS_REPORTING, &phMax);
   esp_zb_cluster_add_attr(esp_zb_ph_cluster, ESPZB_CID_PH, 0x0002, ESP_ZB_ZCL_ATTR_TYPE_U16, ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY | ESP_ZB_ZCL_ATTR_ACCESS_REPORTING, &phMin);
-  // Create PH cluster list.
+  // Add the cluster to the list.
   esp_zb_cluster_list_add_custom_cluster(esp_zb_ph_cluster_list, esp_zb_ph_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
+  // Create the level client cluster (PH level selector)
+  esp_zb_attribute_list_t *esp_zb_ph_set_level_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_LEVEL_CONTROL);
+  esp_zb_cluster_list_add_level_cluster(esp_zb_ph_cluster_list, esp_zb_ph_set_level_cluster, ESP_ZB_ZCL_CLUSTER_CLIENT_ROLE);
+  // Create the level server cluster (desposit level reporter)
+  esp_zb_attribute_list_t *esp_zb_ph_get_level_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_LEVEL_CONTROL);
+  esp_zb_cluster_list_add_level_cluster(esp_zb_ph_cluster_list, esp_zb_ph_get_level_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
+
+
   // Add the endpoint to the list
   esp_zb_endpoint_config_t esp_zb_ph_endpoint_config = {
     .endpoint = ESPZB_EP_PH_SENSOR,
@@ -220,6 +226,13 @@ static void esp_zb_task(void *pvParameters) {
   esp_zb_cluster_add_attr(esp_zb_chlorine_cluster, ESPZB_CID_CHLORINE, 0x0002, ESP_ZB_ZCL_ATTR_TYPE_U16, ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY | ESP_ZB_ZCL_ATTR_ACCESS_REPORTING, &chlorineMin);
   // Create Chlorine cluster
   esp_zb_cluster_list_add_custom_cluster(esp_zb_chlorine_cluster_list, esp_zb_chlorine_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
+  // Create the level client cluster (Chlorine level selector)
+  esp_zb_attribute_list_t *esp_zb_chlorine_set_level_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_LEVEL_CONTROL);
+  esp_zb_cluster_list_add_level_cluster(esp_zb_chlorine_cluster_list, esp_zb_chlorine_set_level_cluster, ESP_ZB_ZCL_CLUSTER_CLIENT_ROLE);
+  // Create the level server cluster (desposit level reporter)
+  esp_zb_attribute_list_t *esp_zb_chlorine_get_level_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_LEVEL_CONTROL);
+  esp_zb_cluster_list_add_level_cluster(esp_zb_chlorine_cluster_list, esp_zb_chlorine_get_level_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
+
   // Add the endpoint to the list
   esp_zb_endpoint_config_t esp_zb_chlorine_endpoint_config = {
     .endpoint = ESPZB_EP_CHLORINE_SENSOR,
@@ -235,12 +248,18 @@ static void esp_zb_task(void *pvParameters) {
   //
 
   // Create the clusters list
-  esp_zb_cluster_list_t *esp_zb_algaecide_switch_cluster_list = esp_zb_zcl_cluster_list_create();
+  esp_zb_cluster_list_t *esp_zb_algaecide_cluster_list = esp_zb_zcl_cluster_list_create();
   // Create the switch cluster/attributges
   esp_zb_attribute_list_t *esp_zb_algaecide_switch_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_ON_OFF);
   esp_zb_on_off_cluster_add_attr(esp_zb_algaecide_switch_cluster, ESP_ZB_ZCL_ATTR_ON_OFF_ON_OFF_ID, &globalData.algaecide.enabled);
   // Add the cluster to the list
-  esp_zb_cluster_list_add_on_off_cluster(esp_zb_algaecide_switch_cluster_list, esp_zb_algaecide_switch_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
+  esp_zb_cluster_list_add_on_off_cluster(esp_zb_algaecide_cluster_list, esp_zb_algaecide_switch_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
+  // Create the level client cluster (Algaecide level selector)
+  esp_zb_attribute_list_t *esp_zb_algaecide_set_level_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_LEVEL_CONTROL);
+  esp_zb_cluster_list_add_level_cluster(esp_zb_algaecide_cluster_list, esp_zb_algaecide_set_level_cluster, ESP_ZB_ZCL_CLUSTER_CLIENT_ROLE);
+  // Create the level server cluster (desposit level reporter)
+  esp_zb_attribute_list_t *esp_zb_algaecide_get_level_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_LEVEL_CONTROL);
+  esp_zb_cluster_list_add_level_cluster(esp_zb_algaecide_cluster_list, esp_zb_algaecide_get_level_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
 
   // Create the endpoint configuration, and add it to the endpoint lists attaching the clusters list.
   esp_zb_endpoint_config_t esp_zb_algaecide_switch_endpoint_config = {
@@ -249,7 +268,7 @@ static void esp_zb_task(void *pvParameters) {
     .app_device_id = ESP_ZB_HA_CUSTOM_ATTR_DEVICE_ID,
     .app_device_version = 0
   };
-  esp_zb_ep_list_add_ep(esp_zb_ep_list, esp_zb_algaecide_switch_cluster_list, esp_zb_algaecide_switch_endpoint_config);
+  esp_zb_ep_list_add_ep(esp_zb_ep_list, esp_zb_algaecide_cluster_list, esp_zb_algaecide_switch_endpoint_config);
 
   //
   // Register the endpoint list in the device and start the ZB stack.
