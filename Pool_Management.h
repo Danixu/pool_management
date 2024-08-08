@@ -1,25 +1,4 @@
-
-#define DEBUG 1
-
-#if DEBUG == 1
-void logger(const char* format, ...) {
-  va_list argptr;
-  va_start(argptr, format);
-  char strBuf[200];
-  sprintf(strBuf, format, argptr);
-  Serial.print(strBuf);
-}
-void logger_line(const char* format, ...) {
-  va_list argptr;
-  va_start(argptr, format);
-  char strBuf[200];
-  sprintf(strBuf, format, argptr);
-  Serial.println(strBuf);
-}
-#else
-#define logger(...) ;
-#define logger_line(...) ;
-#endif
+#define TAG "Pool Management"
 
 // Pack the struct tight
 #pragma pack(push, 1)
@@ -50,12 +29,34 @@ struct runtime_settings {
   uint16_t phCalibrationHigh = 0;
 };
 
+// Values storage
+struct sensor_data {
+  int32_t value = 0;
+  int16_t level = 0;
+  bool enabled = false;
+};
+struct global_data {
+  bool enabled = false;
+  bool pump = false;
+  int32_t temperature = 2300;
+  sensor_data algaecide;
+  sensor_data chlorine;
+  sensor_data ph;
+};
+
 // EEPROM header used to determine if data was written
 char header[2] = { 'P', 'M' };
 
 // Endpoints
 #define ESPZB_EP_BASIC 1
-#define ESPZB_PUMP_SWITCH 2
-#define ESPZB_PH_SENSOR 3
-#define ESPZB_CHLORINE_SENSOR 4
-#define ESPZB_ALGAECIDE_SENSOR 5
+#define ESPZB_EP_PUMP_SWITCH 2
+#define ESPZB_EP_PH_SENSOR 3
+#define ESPZB_EP_CHLORINE_SENSOR 4
+#define ESPZB_EP_ALGAECIDE_SWITCH 5
+
+// ClustersID
+#define ESPZB_CID_CHLORINE 0xfd09U
+#define ESPZB_CID_PH 0xfd10U
+
+/********************* Global Variables ***************************/
+global_data globalData;
