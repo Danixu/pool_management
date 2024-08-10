@@ -12,6 +12,7 @@
 
 #include "Pool_Management.h"
 #include "zigbee_ed_functions.h"
+#include "zb_sensor.h"
 
 #ifndef ZIGBEE_MODE_ED
 #error "Zigbee end device mode is not selected in Tools->Zigbee mode"
@@ -72,19 +73,17 @@ static void esp_zb_task(void *pvParameters) {
   // PH Switch
   bool phSwitch = false;
   // PH Values
-  uint16_t phValue = 700;
-  uint16_t phMin = 0;
-  uint16_t phMax = 1400;
+  uint16_t phMeasuredMin = 0;
+  uint16_t phMeasuredMax = 1400;
+  uint16_t phTargetMin = 700;
+  uint16_t phTargetMax = 740;
+  uint16_t phDepositMin = 0;
+  uint16_t phDepositMax = 100;
 
-  // Chlorine Switch
-  bool chlorineSwitch = false;
   // Chlorine Values
   uint16_t chlorineValue = 700;
   uint16_t chlorineMin = 0;
   uint16_t chlorineMax = 1400;
-
-  // Algaecide Switch
-  bool algaecideSwitch = false;
 
   // Initialize Zigbee stack
   esp_zb_cfg_t zb_nwk_cfg = ESP_ZB_ZED_CONFIG();
@@ -134,7 +133,7 @@ static void esp_zb_task(void *pvParameters) {
   // Add the cluster to the basic list
   esp_zb_cluster_list_add_temperature_meas_cluster(esp_zb_basic_cluster_list, esp_zb_temperature_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
 
-  // Create the main switch cluster/attributges
+  // Create the main switch cluster/attributes
   esp_zb_attribute_list_t *esp_zb_main_switch_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_ON_OFF);
   esp_zb_on_off_cluster_add_attr(esp_zb_main_switch_cluster, ESP_ZB_ZCL_ATTR_ON_OFF_ON_OFF_ID, &globalData.enabled);
   // Add the cluster to the basic list
@@ -153,122 +152,26 @@ static void esp_zb_task(void *pvParameters) {
   //
   // ------------------------------ Cluster Pump Switch ------------------------------
   //
-
-  // Create the clusters list
-  esp_zb_cluster_list_t *esp_zb_pump_switch_cluster_list = esp_zb_zcl_cluster_list_create();
-  // Create the switch cluster/attributges
-  esp_zb_attribute_list_t *esp_zb_pump_switch_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_ON_OFF);
-  esp_zb_on_off_cluster_add_attr(esp_zb_pump_switch_cluster, ESP_ZB_ZCL_ATTR_ON_OFF_ON_OFF_ID, &globalData.pump);
-  // Add the cluster to the list
-  esp_zb_cluster_list_add_on_off_cluster(esp_zb_pump_switch_cluster_list, esp_zb_pump_switch_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
-
-  // Create the endpoint configuration, and add it to the endpoint lists attaching the clusters list.
-  esp_zb_endpoint_config_t esp_zb_pump_switch_endpoint_config = {
-    .endpoint = ESPZB_EP_PUMP_SWITCH,
-    .app_profile_id = ESP_ZB_AF_HA_PROFILE_ID,
-    .app_device_id = ESP_ZB_HA_CUSTOM_ATTR_DEVICE_ID,
-    .app_device_version = 0
-  };
-  esp_zb_ep_list_add_ep(esp_zb_ep_list, esp_zb_pump_switch_cluster_list, esp_zb_pump_switch_endpoint_config);
+  globalData.pump_sensor.init(esp_zb_ep_list, ESPZB_EP_PUMP_SWITCH, 0, false, false, false);
 
 
   //
   // ------------------------------ Cluster PH ------------------------------
   //
-
-  // Create the PH Cluster List
-  esp_zb_cluster_list_t *esp_zb_ph_cluster_list = esp_zb_zcl_cluster_list_create();
-  // Create the switch cluster/attributges
-  esp_zb_attribute_list_t *esp_zb_ph_switch_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_ON_OFF);
-  esp_zb_on_off_cluster_add_attr(esp_zb_ph_switch_cluster, ESP_ZB_ZCL_ATTR_ON_OFF_ON_OFF_ID, &globalData.ph.enabled);
-  // Add the cluster to the list
-  esp_zb_cluster_list_add_on_off_cluster(esp_zb_ph_cluster_list, esp_zb_ph_switch_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
-  // Create custom cluster for PH
-  esp_zb_attribute_list_t *esp_zb_ph_cluster = esp_zb_zcl_attr_list_create(ESPZB_CID_PH);
-  esp_zb_cluster_add_attr(esp_zb_ph_cluster, ESPZB_CID_PH, 0x0000, ESP_ZB_ZCL_ATTR_TYPE_U16, ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY | ESP_ZB_ZCL_ATTR_ACCESS_REPORTING, &globalData.ph.value);
-  esp_zb_cluster_add_attr(esp_zb_ph_cluster, ESPZB_CID_PH, 0x0001, ESP_ZB_ZCL_ATTR_TYPE_U16, ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY | ESP_ZB_ZCL_ATTR_ACCESS_REPORTING, &phMax);
-  esp_zb_cluster_add_attr(esp_zb_ph_cluster, ESPZB_CID_PH, 0x0002, ESP_ZB_ZCL_ATTR_TYPE_U16, ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY | ESP_ZB_ZCL_ATTR_ACCESS_REPORTING, &phMin);
-  // Add the cluster to the list.
-  esp_zb_cluster_list_add_custom_cluster(esp_zb_ph_cluster_list, esp_zb_ph_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
-  // Create the level client cluster (PH level selector)
-  esp_zb_attribute_list_t *esp_zb_ph_set_level_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_LEVEL_CONTROL);
-  esp_zb_cluster_list_add_level_cluster(esp_zb_ph_cluster_list, esp_zb_ph_set_level_cluster, ESP_ZB_ZCL_CLUSTER_CLIENT_ROLE);
-  // Create the level server cluster (desposit level reporter)
-  esp_zb_attribute_list_t *esp_zb_ph_get_level_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_LEVEL_CONTROL);
-  esp_zb_cluster_list_add_level_cluster(esp_zb_ph_cluster_list, esp_zb_ph_get_level_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
-
-
-  // Add the endpoint to the list
-  esp_zb_endpoint_config_t esp_zb_ph_endpoint_config = {
-    .endpoint = ESPZB_EP_PH_SENSOR,
-    .app_profile_id = ESP_ZB_AF_HA_PROFILE_ID,
-    .app_device_id = ESP_ZB_HA_CUSTOM_ATTR_DEVICE_ID,
-    .app_device_version = 0
-  };
-  esp_zb_ep_list_add_ep(esp_zb_ep_list, esp_zb_ph_cluster_list, esp_zb_ph_endpoint_config);
+  globalData.ph_sensor.init(esp_zb_ep_list, ESPZB_EP_PH_SENSOR, ESPZB_CID_PH_VALUE, true, true, true);
 
 
   //
   // ------------------------------ Cluster Chlorine ------------------------------
   //
-
-  // Create the Chlorine Cluster List
-  esp_zb_cluster_list_t *esp_zb_chlorine_cluster_list = esp_zb_zcl_cluster_list_create();
-  // Create the switch cluster/attributges
-  esp_zb_attribute_list_t *esp_zb_chlorine_switch_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_ON_OFF);
-  esp_zb_on_off_cluster_add_attr(esp_zb_chlorine_switch_cluster, ESP_ZB_ZCL_ATTR_ON_OFF_ON_OFF_ID, &globalData.chlorine.enabled);
-  // Add the cluster to the list
-  esp_zb_cluster_list_add_on_off_cluster(esp_zb_chlorine_cluster_list, esp_zb_chlorine_switch_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
-  // Create custom cluster for Chlorine
-  esp_zb_attribute_list_t *esp_zb_chlorine_cluster = esp_zb_zcl_attr_list_create(ESPZB_CID_CHLORINE);
-  esp_zb_cluster_add_attr(esp_zb_chlorine_cluster, ESPZB_CID_CHLORINE, 0x0000, ESP_ZB_ZCL_ATTR_TYPE_U16, ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY | ESP_ZB_ZCL_ATTR_ACCESS_REPORTING, &globalData.chlorine.value);
-  esp_zb_cluster_add_attr(esp_zb_chlorine_cluster, ESPZB_CID_CHLORINE, 0x0001, ESP_ZB_ZCL_ATTR_TYPE_U16, ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY | ESP_ZB_ZCL_ATTR_ACCESS_REPORTING, &chlorineMax);
-  esp_zb_cluster_add_attr(esp_zb_chlorine_cluster, ESPZB_CID_CHLORINE, 0x0002, ESP_ZB_ZCL_ATTR_TYPE_U16, ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY | ESP_ZB_ZCL_ATTR_ACCESS_REPORTING, &chlorineMin);
-  // Create Chlorine cluster
-  esp_zb_cluster_list_add_custom_cluster(esp_zb_chlorine_cluster_list, esp_zb_chlorine_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
-  // Create the level client cluster (Chlorine level selector)
-  esp_zb_attribute_list_t *esp_zb_chlorine_set_level_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_LEVEL_CONTROL);
-  esp_zb_cluster_list_add_level_cluster(esp_zb_chlorine_cluster_list, esp_zb_chlorine_set_level_cluster, ESP_ZB_ZCL_CLUSTER_CLIENT_ROLE);
-  // Create the level server cluster (desposit level reporter)
-  esp_zb_attribute_list_t *esp_zb_chlorine_get_level_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_LEVEL_CONTROL);
-  esp_zb_cluster_list_add_level_cluster(esp_zb_chlorine_cluster_list, esp_zb_chlorine_get_level_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
-
-  // Add the endpoint to the list
-  esp_zb_endpoint_config_t esp_zb_chlorine_endpoint_config = {
-    .endpoint = ESPZB_EP_CHLORINE_SENSOR,
-    .app_profile_id = ESP_ZB_AF_HA_PROFILE_ID,
-    .app_device_id = ESP_ZB_HA_CUSTOM_ATTR_DEVICE_ID,
-    .app_device_version = 0
-  };
-  esp_zb_ep_list_add_ep(esp_zb_ep_list, esp_zb_chlorine_cluster_list, esp_zb_chlorine_endpoint_config);
+  globalData.chlorine_sensor.init(esp_zb_ep_list, ESPZB_EP_CHLORINE_SENSOR, ESPZB_CID_CHLORINE_VALUE, true, true, true);
 
 
   //
   // ------------------------------ Cluster Algaecide Switch ------------------------------
   //
+  globalData.algaecide_sensor.init(esp_zb_ep_list, ESPZB_EP_ALGAECIDE_SWITCH, 0, false, false, true);
 
-  // Create the clusters list
-  esp_zb_cluster_list_t *esp_zb_algaecide_cluster_list = esp_zb_zcl_cluster_list_create();
-  // Create the switch cluster/attributges
-  esp_zb_attribute_list_t *esp_zb_algaecide_switch_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_ON_OFF);
-  esp_zb_on_off_cluster_add_attr(esp_zb_algaecide_switch_cluster, ESP_ZB_ZCL_ATTR_ON_OFF_ON_OFF_ID, &globalData.algaecide.enabled);
-  // Add the cluster to the list
-  esp_zb_cluster_list_add_on_off_cluster(esp_zb_algaecide_cluster_list, esp_zb_algaecide_switch_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
-  // Create the level client cluster (Algaecide level selector)
-  esp_zb_attribute_list_t *esp_zb_algaecide_set_level_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_LEVEL_CONTROL);
-  esp_zb_cluster_list_add_level_cluster(esp_zb_algaecide_cluster_list, esp_zb_algaecide_set_level_cluster, ESP_ZB_ZCL_CLUSTER_CLIENT_ROLE);
-  // Create the level server cluster (desposit level reporter)
-  esp_zb_attribute_list_t *esp_zb_algaecide_get_level_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_LEVEL_CONTROL);
-  esp_zb_cluster_list_add_level_cluster(esp_zb_algaecide_cluster_list, esp_zb_algaecide_get_level_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
-
-  // Create the endpoint configuration, and add it to the endpoint lists attaching the clusters list.
-  esp_zb_endpoint_config_t esp_zb_algaecide_switch_endpoint_config = {
-    .endpoint = ESPZB_EP_ALGAECIDE_SWITCH,
-    .app_profile_id = ESP_ZB_AF_HA_PROFILE_ID,
-    .app_device_id = ESP_ZB_HA_CUSTOM_ATTR_DEVICE_ID,
-    .app_device_version = 0
-  };
-  esp_zb_ep_list_add_ep(esp_zb_ep_list, esp_zb_algaecide_cluster_list, esp_zb_algaecide_switch_endpoint_config);
 
   //
   // Register the endpoint list in the device and start the ZB stack.
@@ -335,7 +238,7 @@ esp_err_t zb_update_ph(int32_t ph) {
   globalData.ph.value = ph;
   esp_err_t state = esp_zb_zcl_set_attribute_val(
     ESPZB_EP_PH_SENSOR,
-    ESPZB_CID_PH,
+    ESPZB_CID_PH_VALUE,
     ESP_ZB_ZCL_CLUSTER_SERVER_ROLE,
     0x0000,
     &globalData.ph.value,
@@ -351,7 +254,7 @@ esp_err_t zb_update_ph(int32_t ph) {
   static esp_zb_zcl_report_attr_cmd_t ph_cmd_req = {
     { NULL, NULL, ESPZB_EP_PH_SENSOR },
     ESP_ZB_APS_ADDR_MODE_DST_ADDR_ENDP_NOT_PRESENT,
-    ESPZB_CID_PH,
+    ESPZB_CID_PH_VALUE,
     ESP_ZB_ZCL_CLUSTER_SERVER_ROLE,
     0x0000
   };
@@ -371,7 +274,7 @@ esp_err_t zb_update_chlorine(int32_t chlorine) {
   globalData.chlorine.value = chlorine;
   esp_err_t state = esp_zb_zcl_set_attribute_val(
     ESPZB_EP_CHLORINE_SENSOR,
-    ESPZB_CID_CHLORINE,
+    ESPZB_CID_CHLORINE_VALUE,
     ESP_ZB_ZCL_CLUSTER_SERVER_ROLE,
     0x0000,
     &globalData.chlorine.value,
@@ -387,7 +290,7 @@ esp_err_t zb_update_chlorine(int32_t chlorine) {
   static esp_zb_zcl_report_attr_cmd_t chlorine_cmd_req = {
     { NULL, NULL, ESPZB_EP_CHLORINE_SENSOR },
     ESP_ZB_APS_ADDR_MODE_DST_ADDR_ENDP_NOT_PRESENT,
-    ESPZB_CID_CHLORINE,
+    ESPZB_CID_CHLORINE_VALUE,
     ESP_ZB_ZCL_CLUSTER_SERVER_ROLE,
     0x0000
   };
@@ -422,16 +325,16 @@ void loop() {
   if (new_run != last_run) {
     log_d("Updating data.");
     last_run = new_run;
-    zb_update_temperature(random(1000, 4000));
-    zb_update_ph(random(1000, 1400));
-    zb_update_chlorine(random(1000, 1400));
+    //zb_update_temperature(random(1000, 4000));
+    //zb_update_ph(random(1000, 1400));
+    //zb_update_chlorine(random(1000, 1400));
 
     // Report the status
     log_v("Global enabled: %d - Pump: %d", globalData.enabled, globalData.pump);
     log_v("Temperature: %0.2f", (float)globalData.temperature / 100);
-    log_v("Chlorine: %0.2f - Enabled: %d - Level: %0.2f", (float)globalData.chlorine.value / 100, globalData.chlorine.enabled, (float)globalData.chlorine.level / 100);
-    log_v("PH: %0.2f - Enabled: %d - Level: %0.2f", (float)globalData.ph.value / 100, globalData.ph.enabled, (float)globalData.ph.level / 100);
-    log_v("Algaecide Enabled: %d - Level: %0.2f", globalData.algaecide.enabled, (float)globalData.algaecide.level / 100);
+    log_v("Chlorine: %0.2f - Enabled: %d - Deposit Level: %d - Target Level %0.2f", (float)globalData.chlorine.value / 100, globalData.chlorine.enabled, globalData.chlorine.depositLevel, (float)globalData.chlorine.targetLevel / 100);
+    log_v("PH: %0.2f - Enabled: %d - Deposit Level: %d - Target Level %0.2f", (float)globalData.ph.value / 100, globalData.ph.enabled, globalData.ph.depositLevel, (float)globalData.ph.targetLevel / 100);
+    log_v("Algaecide Enabled: %d - Deposit Level: %d", globalData.algaecide.enabled, globalData.algaecide.depositLevel);
   }
 }
 

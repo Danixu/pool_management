@@ -1,3 +1,5 @@
+#include "zb_sensor.h"
+
 #define TAG "Pool Management"
 
 // Pack the struct tight
@@ -31,8 +33,9 @@ struct runtime_settings {
 
 // Values storage
 struct sensor_data {
-  int32_t value = 0;
-  int16_t level = 0;
+  uint16_t value = 0;
+  uint16_t targetLevel = 0;
+  uint16_t depositLevel = 0;
   bool enabled = false;
 };
 struct global_data {
@@ -42,6 +45,11 @@ struct global_data {
   sensor_data algaecide;
   sensor_data chlorine;
   sensor_data ph;
+
+  zb_sensor pump_sensor = zb_sensor();
+  zb_sensor algaecide_sensor = zb_sensor();
+  zb_sensor chlorine_sensor = zb_sensor();
+  zb_sensor ph_sensor = zb_sensor();
 };
 
 // EEPROM header used to determine if data was written
@@ -55,8 +63,12 @@ char header[2] = { 'P', 'M' };
 #define ESPZB_EP_ALGAECIDE_SWITCH 5
 
 // ClustersID
-#define ESPZB_CID_CHLORINE 0xfd09U
-#define ESPZB_CID_PH 0xfd10U
+#define ESPZB_CID_CHLORINE_VALUE 0xfd10U
+#define ESPZB_CID_CHLORINE_TARGET 0xfd11U
+#define ESPZB_CID_CHLORINE_DEPOSIT 0xfd12U
+#define ESPZB_CID_PH_VALUE 0xfd20U
+#define ESPZB_CID_PH_TARGET 0xfd21U
+#define ESPZB_CID_PH_DEPOSIT 0xfd22U
 
 /********************* Global Variables ***************************/
 global_data globalData;
