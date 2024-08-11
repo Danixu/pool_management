@@ -127,73 +127,6 @@ static esp_err_t zb_read_attr_resp_handler(const esp_zb_zcl_cmd_read_attr_resp_m
   return ESP_OK;
 }
 
-static esp_err_t zb_write_attr_resp_handler(const esp_zb_zcl_set_attr_value_message_t *message) {
-  esp_err_t ret = ESP_OK;
-
-  if (!message) {
-    log_e("Empty message");
-  }
-  if (message->info.status != ESP_ZB_ZCL_STATUS_SUCCESS) {
-    log_e("Received message: error status(%d)", message->info.status);
-  }
-
-  log_i(
-    "Received message: endpoint(%d), cluster(0x%x), attribute(0x%x), data size(%d)", message->info.dst_endpoint, message->info.cluster, message->attribute.id,
-    message->attribute.data.size);
-  if (message->info.dst_endpoint == ESPZB_EP_BASIC) {
-    // Basic endpoint
-    log_d("Basic endpoint update");
-
-    if (message->info.cluster == ESP_ZB_ZCL_CLUSTER_ID_ON_OFF) {
-      // Switch cluster
-      bool switch_state = message->attribute.data.value ? *(bool *)message->attribute.data.value : 0;
-      log_i("Global switch sets to %s", switch_state ? "On" : "Off");
-      globalData.enabled = switch_state;
-    }
-  } else if (message->info.dst_endpoint == ESPZB_EP_PUMP_SWITCH) {
-    // Basic endpoint
-    log_d("Pump endpoint update");
-
-    if (message->info.cluster == ESP_ZB_ZCL_CLUSTER_ID_ON_OFF) {
-      // Switch cluster
-      bool switch_state = message->attribute.data.value ? *(bool *)message->attribute.data.value : 0;
-      log_i("Pump switch sets to %s", switch_state ? "On" : "Off");
-      globalData.pump = switch_state;
-    }
-  } else if (message->info.dst_endpoint == ESPZB_EP_PH_SENSOR) {
-    // Basic endpoint
-    log_d("PH endpoint update");
-
-    if (message->info.cluster == ESP_ZB_ZCL_CLUSTER_ID_ON_OFF) {
-      // Switch cluster
-      bool switch_state = message->attribute.data.value ? *(bool *)message->attribute.data.value : 0;
-      log_i("PH switch sets to %s", switch_state ? "On" : "Off");
-      globalData.ph.enabled = switch_state;
-    }
-  } else if (message->info.dst_endpoint == ESPZB_EP_CHLORINE_SENSOR) {
-    // Basic endpoint
-    log_d("Chlorine endpoint update");
-
-    if (message->info.cluster == ESP_ZB_ZCL_CLUSTER_ID_ON_OFF) {
-      // Switch cluster
-      bool switch_state = message->attribute.data.value ? *(bool *)message->attribute.data.value : 0;
-      log_i("Chlorine switch sets to %s", switch_state ? "On" : "Off");
-      globalData.chlorine.enabled = switch_state;
-    }
-  } else if (message->info.dst_endpoint == ESPZB_EP_ALGAECIDE_SWITCH) {
-    // Basic endpoint
-    log_d("Algaecide endpoint update");
-
-    if (message->info.cluster == ESP_ZB_ZCL_CLUSTER_ID_ON_OFF) {
-      // Switch cluster
-      bool switch_state = message->attribute.data.value ? *(bool *)message->attribute.data.value : 0;
-      log_i("Algaecide switch sets to %s", switch_state ? "On" : "Off");
-      globalData.algaecide.enabled = switch_state;
-    }
-  }
-  return ret;
-}
-
 static esp_err_t zb_configure_report_resp_handler(const esp_zb_zcl_cmd_config_report_resp_message_t *message) {
   ESP_RETURN_ON_FALSE(message, ESP_FAIL, TAG, "Empty message");
   ESP_RETURN_ON_FALSE(message->info.status == ESP_ZB_ZCL_STATUS_SUCCESS, ESP_ERR_INVALID_ARG, TAG, "Received message: error status(%d)",
@@ -222,7 +155,6 @@ static esp_err_t zb_action_handler(esp_zb_core_action_callback_id_t callback_id,
       break;
     case ESP_ZB_CORE_SET_ATTR_VALUE_CB_ID:
       log_v("Set Attribute Response");
-      ret = zb_write_attr_resp_handler((esp_zb_zcl_set_attr_value_message_t *)message);
       break;
     case ESP_ZB_CORE_CMD_REPORT_CONFIG_RESP_CB_ID:
       log_v("Report Config Response");

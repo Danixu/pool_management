@@ -56,34 +56,21 @@
 
 
 /********************* Zigbee functions **************************/
+static esp_err_t common_action_handler(esp_zb_core_action_callback_id_t callback_id, const void *message) {
+  // This handlers cannot be registered directly because they are not static,
+  // so we will use this "caller" function.
+  globalData.temperature_sensor.actionHandler(callback_id, message);
+  globalData.pump_sensor.actionHandler(callback_id, message);
+  globalData.ph_sensor.actionHandler(callback_id, message);
+  globalData.chlorine_sensor.actionHandler(callback_id, message);
+  globalData.algaecide_sensor.actionHandler(callback_id, message);
+  return ESP_OK;
+}
+
+
 static void esp_zb_task(void *pvParameters) {
   // Create the endpoints list
   esp_zb_ep_list_t *esp_zb_ep_list = esp_zb_ep_list_create();
-
-  // Main Switch
-  bool mainSwitch = false;
-  // Temperature Values
-  int tempValue = 2300;
-  int tempMin = -32000;
-  int tempMax = 32000;
-
-  // Pump Switch
-  bool pumpSwitch = false;
-
-  // PH Switch
-  bool phSwitch = false;
-  // PH Values
-  uint16_t phMeasuredMin = 0;
-  uint16_t phMeasuredMax = 1400;
-  uint16_t phTargetMin = 700;
-  uint16_t phTargetMax = 740;
-  uint16_t phDepositMin = 0;
-  uint16_t phDepositMax = 100;
-
-  // Chlorine Values
-  uint16_t chlorineValue = 700;
-  uint16_t chlorineMin = 0;
-  uint16_t chlorineMax = 1400;
 
   // Initialize Zigbee stack
   esp_zb_cfg_t zb_nwk_cfg = ESP_ZB_ZED_CONFIG();
@@ -126,51 +113,31 @@ static void esp_zb_task(void *pvParameters) {
   esp_zb_cluster_list_add_time_cluster(esp_zb_basic_cluster_list, esp_zb_time_cluster, ESP_ZB_ZCL_CLUSTER_CLIENT_ROLE);
 
   // Create temperature cluster/attributes
-  esp_zb_attribute_list_t *esp_zb_temperature_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_TEMP_MEASUREMENT);
-  esp_zb_temperature_meas_cluster_add_attr(esp_zb_temperature_cluster, ESP_ZB_ZCL_ATTR_TEMP_MEASUREMENT_VALUE_ID, &globalData.temperature);
-  esp_zb_temperature_meas_cluster_add_attr(esp_zb_temperature_cluster, ESP_ZB_ZCL_ATTR_TEMP_MEASUREMENT_MIN_VALUE_ID, &tempMin);
-  esp_zb_temperature_meas_cluster_add_attr(esp_zb_temperature_cluster, ESP_ZB_ZCL_ATTR_TEMP_MEASUREMENT_MAX_VALUE_ID, &tempMax);
-  // Add the cluster to the basic list
-  esp_zb_cluster_list_add_temperature_meas_cluster(esp_zb_basic_cluster_list, esp_zb_temperature_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
-
-  // Create the main switch cluster/attributes
-  esp_zb_attribute_list_t *esp_zb_main_switch_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_ON_OFF);
-  esp_zb_on_off_cluster_add_attr(esp_zb_main_switch_cluster, ESP_ZB_ZCL_ATTR_ON_OFF_ON_OFF_ID, &globalData.enabled);
-  // Add the cluster to the basic list
-  esp_zb_cluster_list_add_on_off_cluster(esp_zb_basic_cluster_list, esp_zb_main_switch_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE);
-
-  // Create the endpoint configuration, and add it to the endpoint lists attaching the clusters list.
-  esp_zb_endpoint_config_t esp_zb_basic_endpoint_config = {
-    .endpoint = ESPZB_EP_BASIC,
-    .app_profile_id = ESP_ZB_AF_HA_PROFILE_ID,
-    .app_device_id = ESP_ZB_HA_CUSTOM_ATTR_DEVICE_ID,
-    .app_device_version = 0
-  };
-  esp_zb_ep_list_add_ep(esp_zb_ep_list, esp_zb_basic_cluster_list, esp_zb_basic_endpoint_config);
+  globalData.temperature_sensor.init(esp_zb_ep_list, ESPZB_EP_BASIC, true, false, false, esp_zb_basic_cluster_list);
 
 
   //
   // ------------------------------ Cluster Pump Switch ------------------------------
   //
-  globalData.pump_sensor.init(esp_zb_ep_list, ESPZB_EP_PUMP_SWITCH, 0, false, false, false);
+  globalData.pump_sensor.init(esp_zb_ep_list, ESPZB_EP_PUMP_SWITCH, false, false, false);
 
 
   //
   // ------------------------------ Cluster PH ------------------------------
   //
-  globalData.ph_sensor.init(esp_zb_ep_list, ESPZB_EP_PH_SENSOR, ESPZB_CID_PH_VALUE, true, true, true);
+  globalData.ph_sensor.init(esp_zb_ep_list, ESPZB_EP_PH_SENSOR, true, true, true);
 
 
   //
   // ------------------------------ Cluster Chlorine ------------------------------
   //
-  globalData.chlorine_sensor.init(esp_zb_ep_list, ESPZB_EP_CHLORINE_SENSOR, ESPZB_CID_CHLORINE_VALUE, true, true, true);
+  globalData.chlorine_sensor.init(esp_zb_ep_list, ESPZB_EP_CHLORINE_SENSOR, true, true, true);
 
 
   //
   // ------------------------------ Cluster Algaecide Switch ------------------------------
   //
-  globalData.algaecide_sensor.init(esp_zb_ep_list, ESPZB_EP_ALGAECIDE_SWITCH, 0, false, false, true);
+  globalData.algaecide_sensor.init(esp_zb_ep_list, ESPZB_EP_ALGAECIDE_SWITCH, false, false, true);
 
 
   //
@@ -182,6 +149,7 @@ static void esp_zb_task(void *pvParameters) {
 
   // Add the action handler to manage the changes made to the attributes and more.
   esp_zb_core_action_handler_register(zb_action_handler);
+  esp_zb_core_action_handler_register(common_action_handler);
 
   // Set the primary network channel mask
   esp_zb_set_primary_network_channel_set(ESP_ZB_PRIMARY_CHANNEL_MASK);
@@ -196,114 +164,6 @@ static void esp_zb_task(void *pvParameters) {
   esp_zb_main_loop_iteration();
 }
 
-esp_err_t zb_update_temperature(int32_t temperature) {
-  /* Update temperature attribute */
-  globalData.temperature = temperature;
-  esp_err_t state = esp_zb_zcl_set_attribute_val(
-    ESPZB_EP_BASIC,
-    ESP_ZB_ZCL_CLUSTER_ID_TEMP_MEASUREMENT,
-    ESP_ZB_ZCL_CLUSTER_SERVER_ROLE,
-    ESP_ZB_ZCL_ATTR_TEMP_MEASUREMENT_VALUE_ID,
-    &globalData.temperature,
-    false);
-
-  /* Error check */
-  if (state != ESP_ZB_ZCL_STATUS_SUCCESS) {
-    log_e("Updating temperature attribute failed!");
-    return ESP_FAIL;
-  }
-
-  /* Report temperature attribute */
-  static esp_zb_zcl_report_attr_cmd_t temperature_cmd_req = {
-    { NULL, NULL, ESPZB_EP_BASIC },
-    ESP_ZB_APS_ADDR_MODE_DST_ADDR_ENDP_NOT_PRESENT,
-    ESP_ZB_ZCL_CLUSTER_ID_TEMP_MEASUREMENT,
-    ESP_ZB_ZCL_CLUSTER_SERVER_ROLE,
-    ESP_ZB_ZCL_ATTR_TEMP_MEASUREMENT_VALUE_ID
-  };
-  state = esp_zb_zcl_report_attr_cmd_req(&temperature_cmd_req);
-
-  /* Error check */
-  if (state != ESP_ZB_ZCL_STATUS_SUCCESS) {
-    log_e("Reporting temperature attribute failed!");
-    return ESP_FAIL;
-  }
-
-  return ESP_OK;
-}
-
-
-esp_err_t zb_update_ph(int32_t ph) {
-  // Update ph attribute
-  globalData.ph.value = ph;
-  esp_err_t state = esp_zb_zcl_set_attribute_val(
-    ESPZB_EP_PH_SENSOR,
-    ESPZB_CID_PH_VALUE,
-    ESP_ZB_ZCL_CLUSTER_SERVER_ROLE,
-    0x0000,
-    &globalData.ph.value,
-    false);
-
-  // Error check
-  if (state != ESP_ZB_ZCL_STATUS_SUCCESS) {
-    log_e("Updating ph attribute failed!");
-    return ESP_FAIL;
-  }
-
-  // Report ph attribute
-  static esp_zb_zcl_report_attr_cmd_t ph_cmd_req = {
-    { NULL, NULL, ESPZB_EP_PH_SENSOR },
-    ESP_ZB_APS_ADDR_MODE_DST_ADDR_ENDP_NOT_PRESENT,
-    ESPZB_CID_PH_VALUE,
-    ESP_ZB_ZCL_CLUSTER_SERVER_ROLE,
-    0x0000
-  };
-  state = esp_zb_zcl_report_attr_cmd_req(&ph_cmd_req);
-
-  // Error check
-  if (state != ESP_ZB_ZCL_STATUS_SUCCESS) {
-    log_e("Reporting ph attribute failed!");
-    return ESP_FAIL;
-  }
-
-  return ESP_OK;
-}
-
-esp_err_t zb_update_chlorine(int32_t chlorine) {
-  /* Update chlorine attribute */
-  globalData.chlorine.value = chlorine;
-  esp_err_t state = esp_zb_zcl_set_attribute_val(
-    ESPZB_EP_CHLORINE_SENSOR,
-    ESPZB_CID_CHLORINE_VALUE,
-    ESP_ZB_ZCL_CLUSTER_SERVER_ROLE,
-    0x0000,
-    &globalData.chlorine.value,
-    false);
-
-  /* Error check */
-  if (state != ESP_ZB_ZCL_STATUS_SUCCESS) {
-    log_e("Updating chlorine attribute failed!");
-    return ESP_FAIL;
-  }
-
-  /* Report chlorine attribute */
-  static esp_zb_zcl_report_attr_cmd_t chlorine_cmd_req = {
-    { NULL, NULL, ESPZB_EP_CHLORINE_SENSOR },
-    ESP_ZB_APS_ADDR_MODE_DST_ADDR_ENDP_NOT_PRESENT,
-    ESPZB_CID_CHLORINE_VALUE,
-    ESP_ZB_ZCL_CLUSTER_SERVER_ROLE,
-    0x0000
-  };
-  state = esp_zb_zcl_report_attr_cmd_req(&chlorine_cmd_req);
-
-  /* Error check */
-  if (state != ESP_ZB_ZCL_STATUS_SUCCESS) {
-    log_e("Reporting chlorine attribute failed!");
-    return ESP_FAIL;
-  }
-
-  return ESP_OK;
-}
 
 /********************* Arduino functions **************************/
 void setup() {
@@ -326,15 +186,24 @@ void loop() {
     log_d("Updating data.");
     last_run = new_run;
     //zb_update_temperature(random(1000, 4000));
-    //zb_update_ph(random(1000, 1400));
-    //zb_update_chlorine(random(1000, 1400));
+    globalData.temperature_sensor.setCurrentValue(random(1000, 4000));
+    globalData.ph_sensor.setCurrentValue(random(1000, 1400));
+    globalData.ph_sensor.setDepositValue(random(0, 100));
+    globalData.chlorine_sensor.setCurrentValue(random(1000, 1400));
+    globalData.chlorine_sensor.setDepositValue(random(0, 100));
+    globalData.algaecide_sensor.setDepositValue(random(0, 100));
+
+    globalData.temperature_sensor.report();
+    globalData.ph_sensor.report();
+    globalData.chlorine_sensor.report();
+    globalData.algaecide_sensor.report();
 
     // Report the status
-    log_v("Global enabled: %d - Pump: %d", globalData.enabled, globalData.pump);
-    log_v("Temperature: %0.2f", (float)globalData.temperature / 100);
-    log_v("Chlorine: %0.2f - Enabled: %d - Deposit Level: %d - Target Level %0.2f", (float)globalData.chlorine.value / 100, globalData.chlorine.enabled, globalData.chlorine.depositLevel, (float)globalData.chlorine.targetLevel / 100);
-    log_v("PH: %0.2f - Enabled: %d - Deposit Level: %d - Target Level %0.2f", (float)globalData.ph.value / 100, globalData.ph.enabled, globalData.ph.depositLevel, (float)globalData.ph.targetLevel / 100);
-    log_v("Algaecide Enabled: %d - Deposit Level: %d", globalData.algaecide.enabled, globalData.algaecide.depositLevel);
+    log_v("Global enabled: %d - Pump: %d", globalData.temperature_sensor.isEnabled(), globalData.pump_sensor.isEnabled());
+    log_v("Temperature: %0.2f", (float)globalData.temperature_sensor.getCurrentValue() / 100);
+    log_v("Chlorine: %0.2f - Enabled: %d - Deposit Level: %d - Target Level %0.2f", (float)globalData.chlorine_sensor.getCurrentValue() / 100, globalData.chlorine_sensor.isEnabled(), globalData.chlorine_sensor.getDepositValue(), (float)globalData.chlorine_sensor.getTargetValue() / 100);
+    log_v("PH: %0.2f - Enabled: %d - Deposit Level: %d - Target Level %0.2f", (float)globalData.ph_sensor.getCurrentValue() / 100, globalData.ph_sensor.isEnabled(), globalData.ph_sensor.getDepositValue(), (float)globalData.ph_sensor.getTargetValue() / 100);
+    log_v("Algaecide Enabled: %d - Deposit Level: %d", globalData.algaecide_sensor.isEnabled(), globalData.algaecide_sensor.getDepositValue());
   }
 }
 
